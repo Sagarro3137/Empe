@@ -1,109 +1,68 @@
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const ADMIN_PASSWORD = "admin123"; // ✅ Change if needed
-
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
-app.use("/uploads", express.static("uploads"));
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 
-// Ensure folders exist
-if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
-if (!fs.existsSync("statuses")) fs.mkdirSync("statuses");
-
-// File Upload Setup
+// Setup file upload for QR image
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "uploads");
+    cb(null, 'uploads/');
   },
   filename: function (req, file, cb) {
-    const uniqueName = `${Date.now()}-${file.originalname}`;
-    cb(null, uniqueName);
-  },
-});
-const upload = multer({ storage });
-
-// Routes
-
-// Homepage route (optional)
-app.get("/", (req, res) => {
-  res.send("✅ QR Pay backend is running!");
-});
-
-// Upload route
-app.post("/upload", upload.single("screenshot"), (req, res) => {
-  const user = req.body.user || "unknown";
-  const filename = req.file.filename;
-
-  fs.writeFileSync(`statuses/${filename}.txt`, "pending");
-  res.send(`
-    <h2>Upload received ✅</h2>
-    <p>Screenshot: <strong>${filename}</strong></p>
-    <p>Check status here:</p>
-    <a href="/status/${filename}" target="_blank">Status Page</a>
-  `);
-});
-
-// Admin panel fetch
-app.get("/admin", (req, res) => {
-  const pass = req.query.pass;
-  if (pass !== ADMIN_PASSWORD) {
-    return res.json({ error: "Invalid password" });
+    cb(null, 'qr.jpg'); // always overwrite as qr.jpg
   }
+});
+const upload = multer({ storage: storage });
 
-  fs.readdir("uploads", (err, files) => {
-    if (err) return res.json({ error: "Upload folder error" });
-    res.json({ files });
+// 📤 Admin Save Route
+app.post('/admin/save', upload.single('qr'), (req, res) => {
+  const {
+    amount,
+    zoomId,
+    zoomPass,
+    codeStart,
+    codeEnd
+  } = req.body;
+
+  const data = {
+    qrImage: 'qr.jpg',
+    amount: parseInt(amount),
+    zoomId,
+    zoomPass,
+    codeStart,
+    codeEnd
+  };
+
+  fs.writeFile('data.json', JSON.stringify(data, null, 2), err => {
+    if (err) {
+      console.error('❌ Error writing data.json:', err);
+      return res.status(500).send('Failed to save data');
+    }
+    res.send('✅ Settings saved successfully!');
   });
 });
 
-// Approve
-app.post("/approve", (req, res) => {
-  const { filename, pass } = req.body;
-  if (pass !== ADMIN_PASSWORD) {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
-
-  fs.writeFileSync(`statuses/${filename}.txt`, "approved");
-  res.json({ message: "✅ Approved" });
+// 📥 User Data Load Route
+app.get('/data', (req, res) => {
+  fs.readFile('data.json', 'utf8', (err, data) => {
+    if (err) {
+      console.error('❌ Error reading data.json:', err);
+      return res.status(500).send('Failed to read data');
+    }
+    res.json(JSON.parse(data));
+  });
 });
 
-// Reject
-app.post("/reject", (req, res) => {
-  const { filename, pass } = req.body;
-  if (pass !== ADMIN_PASSWORD) {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
-
-  fs.writeFileSync(`statuses/${filename}.txt`, "rejected");
-  res.json({ message: "❌ Rejected" });
-});
-
-// Status checker
-app.get("/status/:filename", (req, res) => {
-  const filename = req.params.filename;
-  const statusPath = `statuses/${filename}.txt`;
-
-  if (!fs.existsSync(statusPath)) {
-    return res.send(`<h3>Status not found for ${filename}</h3>`);
-  }
-
-  const status = fs.readFileSync(statusPath, "utf-8");
-  res.send(`
-    <h2>Status for: ${filename}</h2>
-    <p><strong>Status:</strong> ${status}</p>
-  `);
-});
-
-// Start server
+// ✅ Server Start
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
