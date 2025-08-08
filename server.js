@@ -1,81 +1,70 @@
-const express = require("express");
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
-const cors = require("cors");
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const cors = require('cors');
+const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
 app.use(cors());
-app.use(express.json());
-app.use(express.static("public"));
-app.use("/uploads", express.static("uploads"));
-app.use("/approved", express.static("approved"));
-app.use("/declined", express.static("declined"));
+app.use(bodyParser.json());
+app.use(express.static('public'));
 
-const upload = multer({ dest: "uploads/" });
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const APPROVED_DIR = path.join(__dirname, 'approved');
+const DECLINED_DIR = path.join(__dirname, 'declined');
 
-// Upload screenshot
-app.post("/upload", upload.single("screenshot"), (req, res) => {
-  if (!req.file) return res.status(400).send("No file uploaded");
-  res.status(200).send("File uploaded");
+[UPLOADS_DIR, APPROVED_DIR, DECLINED_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 });
 
-// Approve
-app.post("/approve/:filename", (req, res) => {
-  const file = req.params.filename;
-  const oldPath = path.join(__dirname, "uploads", file);
-  const newPath = path.join(__dirname, "approved", file);
-  fs.rename(oldPath, newPath, err => {
-    if (err) return res.status(500).send("Error approving file");
-    res.send("Approved");
-  });
+// Receive UTR from frontend
+app.post('/upload', (req, res) => {
+  const { utr } = req.body;
+  if (!utr) return res.status(400).json({ error: 'UTR is required' });
+
+  const timestamp = Date.now();
+  const filePath = path.join(UPLOADS_DIR, `${timestamp}.txt`);
+  fs.writeFileSync(filePath, utr);
+  res.status(200).json({ message: 'UTR saved' });
 });
 
-// Decline
-app.post("/decline/:filename", (req, res) => {
-  const file = req.params.filename;
-  const oldPath = path.join(__dirname, "uploads", file);
-  const newPath = path.join(__dirname, "declined", file);
-  fs.rename(oldPath, newPath, err => {
-    if (err) return res.status(500).send("Error declining file");
-    res.send("Declined");
-  });
+// List all UTRs for admin panel
+app.get('/list', (req, res) => {
+  const files = fs.readdirSync(UPLOADS_DIR);
+  const data = files.map(file => ({
+    filename: file,
+    utr: fs.readFileSync(path.join(UPLOADS_DIR, file), 'utf-8')
+  }));
+  res.json(data);
 });
 
-// Get pending uploads
-app.get("/pending", (req, res) => {
-  fs.readdir("uploads", (err, files) => {
-    if (err) return res.status(500).json([]);
-    res.json(files);
-  });
+// Approve UTR
+app.post('/approve', (req, res) => {
+  const { filename } = req.body;
+  const oldPath = path.join(UPLOADS_DIR, filename);
+  const newPath = path.join(APPROVED_DIR, filename);
+  if (fs.existsSync(oldPath)) {
+    fs.renameSync(oldPath, newPath);
+    res.json({ message: 'Approved' });
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
 });
 
-// Get approved uploads
-app.get("/approved-list", (req, res) => {
-  fs.readdir("approved", (err, files) => {
-    if (err) return res.status(500).json([]);
-    res.json(files.map(f => ({ filename: f, approved: true })));
-  });
+// Decline UTR
+app.post('/decline', (req, res) => {
+  const { filename } = req.body;
+  const oldPath = path.join(UPLOADS_DIR, filename);
+  const newPath = path.join(DECLINED_DIR, filename);
+  if (fs.existsSync(oldPath)) {
+    fs.renameSync(oldPath, newPath);
+    res.json({ message: 'Declined' });
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
 });
 
-// Get current Zoom info + code
-app.get("/data", (req, res) => {
-  fs.readFile("data.json", "utf8", (err, data) => {
-    if (err) return res.status(500).send("Error reading data");
-    res.json(JSON.parse(data));
-  });
-});
-
-// Update Zoom ID + code
-app.post("/update-data", (req, res) => {
-  fs.writeFile("data.json", JSON.stringify(req.body), err => {
-    if (err) return res.status(500).send("Error saving data");
-    res.send("Data updated");
-  });
-});
-
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
