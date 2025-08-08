@@ -1,5 +1,5 @@
 {
-  "zoom_id": "123-456-789",
-  "zoom_pass": "abc123",
-  "random_code": "B100-B200"
+  "zoomId": "1234567890",
+  "zoomPass": "abc123",
+  "code": "B100 - B200"
 }
