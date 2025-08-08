@@ -1,68 +1,78 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const express = require("express");
+const cors = require("cors");
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Enable JSON & form parsing
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static('uploads'));
 
-// Setup file upload for QR image
+// Static folders
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/approved', express.static(path.join(__dirname, 'approved')));
+app.use('/declined', express.static(path.join(__dirname, 'declined')));
+app.use('/', express.static(__dirname)); // serve index.html etc.
+
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, 'qr.jpg'); // always overwrite as qr.jpg
-  }
+  destination: (req, file, cb) => cb(null, 'uploads'),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
-const upload = multer({ storage: storage });
 
-// 📤 Admin Save Route
-app.post('/admin/save', upload.single('qr'), (req, res) => {
-  const {
-    amount,
-    zoomId,
-    zoomPass,
-    codeStart,
-    codeEnd
-  } = req.body;
+const upload = multer({ storage });
 
-  const data = {
-    qrImage: 'qr.jpg',
-    amount: parseInt(amount),
-    zoomId,
-    zoomPass,
-    codeStart,
-    codeEnd
-  };
+// Upload screenshot
+app.post("/upload", upload.single("screenshot"), (req, res) => {
+  if (!req.file) return res.status(400).send("No file uploaded.");
+  res.send("Uploaded");
+});
 
-  fs.writeFile('data.json', JSON.stringify(data, null, 2), err => {
-    if (err) {
-      console.error('❌ Error writing data.json:', err);
-      return res.status(500).send('Failed to save data');
-    }
-    res.send('✅ Settings saved successfully!');
+// Return list of uploaded screenshots
+app.get("/list", (req, res) => {
+  fs.readdir("uploads", (err, files) => {
+    if (err) return res.status(500).json([]);
+    res.json(files);
   });
 });
 
-// 📥 User Data Load Route
-app.get('/data', (req, res) => {
-  fs.readFile('data.json', 'utf8', (err, data) => {
-    if (err) {
-      console.error('❌ Error reading data.json:', err);
-      return res.status(500).send('Failed to read data');
-    }
-    res.json(JSON.parse(data));
+// Approve
+app.post("/approve", (req, res) => {
+  const { filename } = req.body;
+  fs.rename(`uploads/${filename}`, `approved/${filename}`, (err) => {
+    if (err) return res.status(500).send("Failed");
+    res.send("Approved");
   });
 });
 
-// ✅ Server Start
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+// Decline
+app.post("/decline", (req, res) => {
+  const { filename } = req.body;
+  fs.rename(`uploads/${filename}`, `declined/${filename}`, (err) => {
+    if (err) return res.status(500).send("Failed");
+    res.send("Declined");
+  });
 });
+
+// Serve QR/data info
+app.get("/data.json", (req, res) => {
+  fs.readFile("data.json", "utf8", (err, data) => {
+    if (err) return res.status(500).send("Error reading data.json");
+    res.type("application/json").send(data);
+  });
+});
+
+// Update QR/payment/code/zoom from admin
+app.post("/update-data", (req, res) => {
+  const newData = req.body;
+  fs.writeFile("data.json", JSON.stringify(newData, null, 2), (err) => {
+    if (err) return res.status(500).send("Failed to update");
+    res.send("Updated");
+  });
+});
+
+// Start server
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
