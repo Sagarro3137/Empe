@@ -1,8 +1,7 @@
 {
-  "qrImage": "qr.jpg",
-  "amount": 99,
-  "zoomId": "123-456-7890",
-  "zoomPass": "abc123",
-  "codeStart": "B100",
-  "codeEnd": "B200"
+  "qr": "qrs/qr1.png",
+  "amount": "99",
+  "zoom_id": "123-456-7890",
+  "zoom_pass": "abc123",
+  "random_code": "B100 to B200"
 }
