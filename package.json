@@ -1,7 +1,6 @@
 {
-  "name": "voice-stream-server",
+  "name": "qr-pay-approval",
   "version": "1.0.0",
-  "description": "Live voice broadcast signaling server using WebRTC and Socket.IO",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,20 +8,6 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  },
-  "engines": {
-    "node": ">=14.0.0"
-  },
-  "keywords": [
-    "voice",
-    "broadcast",
-    "webrtc",
-    "socket.io",
-    "live",
-    "mic",
-    "streaming"
-  ],
-  "author": "Guru Dev",
-  "license": "MIT"
+    "multer": "^1.4.5"
+  }
 }
