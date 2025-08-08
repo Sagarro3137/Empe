@@ -1,78 +1,81 @@
 const express = require("express");
-const cors = require("cors");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
+const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable JSON & form parsing
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
+app.use("/uploads", express.static("uploads"));
+app.use("/approved", express.static("approved"));
+app.use("/declined", express.static("declined"));
 
-// Static folders
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/approved', express.static(path.join(__dirname, 'approved')));
-app.use('/declined', express.static(path.join(__dirname, 'declined')));
-app.use('/', express.static(__dirname)); // serve index.html etc.
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads'),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-});
-
-const upload = multer({ storage });
+const upload = multer({ dest: "uploads/" });
 
 // Upload screenshot
 app.post("/upload", upload.single("screenshot"), (req, res) => {
-  if (!req.file) return res.status(400).send("No file uploaded.");
-  res.send("Uploaded");
+  if (!req.file) return res.status(400).send("No file uploaded");
+  res.status(200).send("File uploaded");
 });
 
-// Return list of uploaded screenshots
-app.get("/list", (req, res) => {
+// Approve
+app.post("/approve/:filename", (req, res) => {
+  const file = req.params.filename;
+  const oldPath = path.join(__dirname, "uploads", file);
+  const newPath = path.join(__dirname, "approved", file);
+  fs.rename(oldPath, newPath, err => {
+    if (err) return res.status(500).send("Error approving file");
+    res.send("Approved");
+  });
+});
+
+// Decline
+app.post("/decline/:filename", (req, res) => {
+  const file = req.params.filename;
+  const oldPath = path.join(__dirname, "uploads", file);
+  const newPath = path.join(__dirname, "declined", file);
+  fs.rename(oldPath, newPath, err => {
+    if (err) return res.status(500).send("Error declining file");
+    res.send("Declined");
+  });
+});
+
+// Get pending uploads
+app.get("/pending", (req, res) => {
   fs.readdir("uploads", (err, files) => {
     if (err) return res.status(500).json([]);
     res.json(files);
   });
 });
 
-// Approve
-app.post("/approve", (req, res) => {
-  const { filename } = req.body;
-  fs.rename(`uploads/${filename}`, `approved/${filename}`, (err) => {
-    if (err) return res.status(500).send("Failed");
-    res.send("Approved");
+// Get approved uploads
+app.get("/approved-list", (req, res) => {
+  fs.readdir("approved", (err, files) => {
+    if (err) return res.status(500).json([]);
+    res.json(files.map(f => ({ filename: f, approved: true })));
   });
 });
 
-// Decline
-app.post("/decline", (req, res) => {
-  const { filename } = req.body;
-  fs.rename(`uploads/${filename}`, `declined/${filename}`, (err) => {
-    if (err) return res.status(500).send("Failed");
-    res.send("Declined");
-  });
-});
-
-// Serve QR/data info
-app.get("/data.json", (req, res) => {
+// Get current Zoom info + code
+app.get("/data", (req, res) => {
   fs.readFile("data.json", "utf8", (err, data) => {
-    if (err) return res.status(500).send("Error reading data.json");
-    res.type("application/json").send(data);
+    if (err) return res.status(500).send("Error reading data");
+    res.json(JSON.parse(data));
   });
 });
 
-// Update QR/payment/code/zoom from admin
+// Update Zoom ID + code
 app.post("/update-data", (req, res) => {
-  const newData = req.body;
-  fs.writeFile("data.json", JSON.stringify(newData, null, 2), (err) => {
-    if (err) return res.status(500).send("Failed to update");
-    res.send("Updated");
+  fs.writeFile("data.json", JSON.stringify(req.body), err => {
+    if (err) return res.status(500).send("Error saving data");
+    res.send("Data updated");
   });
 });
 
-// Start server
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
