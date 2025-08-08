@@ -1,7 +1,5 @@
 {
-  "qr": "qrs/qr1.png",
-  "amount": "99",
-  "zoom_id": "123-456-7890",
+  "zoom_id": "123-456-789",
   "zoom_pass": "abc123",
-  "random_code": "B100 to B200"
+  "random_code": "B100-B200"
 }
